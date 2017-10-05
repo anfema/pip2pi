@@ -12,6 +12,8 @@ from subprocess import check_call
 import pkg_resources
 import glob
 import optparse
+import json
+import semver
 
 try:
     import wheel as _; _
@@ -305,6 +307,7 @@ def try_symlink(option, source, target):
 
 
 def _dir2pi(option, argv):
+    versions = {}
     pkgdir = argv[1]
     if not os.path.isdir(pkgdir):
         raise ValueError("no such directory: %r" %(pkgdir, ))
@@ -324,7 +327,8 @@ def _dir2pi(option, argv):
         if pkg_basename.startswith("."):
             continue
         pkg_name, pkg_rest = file_to_package(pkg_basename, pkgdir)
-
+        print(pkg_name)
+        print(pkg_rest)
         pkg_dir_name = pkg_name
         if option.normalize_package_names:
             pkg_dir_name = normalize_pep503(pkg_dir_name)
@@ -354,6 +358,12 @@ def _dir2pi(option, argv):
             )
             processed_pkg.add(pkg_name)
 
+        version = semver.parse_version_info(pkg_rest.split('.tar')[0])
+        if normalize_pip67(pkg_name) in versions:
+            versions[normalize_pip67(pkg_name)].append(version)
+        else:
+            versions[normalize_pip67(pkg_name)] = [version]
+
         if option.build_html:
             with open(os.path.join(pkg_dir, "index.html"), "a") as fp:
                 fp.write("<a href='%(name)s'>%(name)s</a><br />\n" %{
@@ -364,6 +374,11 @@ def _dir2pi(option, argv):
     if option.build_html:
         with open(pkgdirpath("simple/index.html"), "w") as fp:
             fp.write(pkg_index)
+
+    for package,vers in versions.items():
+        latest_version = sorted(vers)[-1]
+        with open(pkgdirpath("simple", package, 'json'), "w") as fp:
+            json.dump({'info': {'version': semver.format_version(*latest_version)}}, fp)
 
     return 0
 
